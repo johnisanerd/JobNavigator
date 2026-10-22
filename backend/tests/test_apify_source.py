@@ -141,6 +141,50 @@ def test_glassdoor_input_always_has_a_location_and_whole_days():
 
 # ── item parsing ────────────────────────────────────────────────────────────
 
+def test_indeed_search_uses_the_same_url_and_stays_unselected():
+    body = apify._indeed_search_input(_search(), 30)
+    assert body == {
+        "mode": "url",
+        "jobUrls": [_indeed_url()],
+        "maxResultsPerInput": 30,
+        "uniqueJobsOnly": True,
+    }
+    assert apify.PRESETS["apify_indeed"].actor == "misceres/indeed-scraper"
+    assert list(apify.PRESETS)[0] == "apify_indeed"
+    preset = apify.PRESETS["apify_indeed_search"]
+    assert preset.actor == "johnvc/indeed-jobs-api"
+    assert preset.parse is apify._parse_indeed_search
+
+
+def test_parse_indeed_search_maps_yearly_pay_and_drops_non_jobs():
+    j = apify._parse_indeed_search({
+        "result_type": "job",
+        "jobTitle": "Program Manager",
+        "companyName": "Example Co",
+        "jobUrl": "https://www.indeed.com/viewjob?jk=example",
+        "location": "Austin, TX",
+        "descriptionMarkdown": "Build the roadmap.",
+        "salaryMin": 100000,
+        "salaryMax": 120000,
+        "salaryPeriod": "YEARLY",
+        "isRemote": True,
+        "datePosted": "2026-10-21",
+    })
+    assert (j["title"], j["company"], j["url"]) == (
+        "Program Manager", "Example Co", "https://www.indeed.com/viewjob?jk=example")
+    assert j["location"] == "Austin, TX"
+    assert j["description"] == "Build the roadmap."
+    assert (j["salary_min"], j["salary_max"]) == (100000, 120000)
+    assert j["arrangement"] is True
+    assert j["posted"] == "2026-10-21"
+    assert apify._parse_indeed_search({"result_type": "other"})["url"] == ""
+    hourly = apify._parse_indeed_search({
+        "result_type": "job", "jobTitle": "Hourly", "jobUrl": "https://www.indeed.com/viewjob?jk=hour",
+        "salaryMin": 20, "salaryMax": 25, "salaryPeriod": "HOURLY",
+    })
+    assert hourly["salary_min"] is None
+
+
 def test_parse_indeed_keeps_annual_salary_only():
     j = apify._parse_indeed({"positionName": "PM", "company": "Acme", "location": "Austin, TX",
                              "url": "https://www.indeed.com/viewjob?jk=abc", "description": "Do things",

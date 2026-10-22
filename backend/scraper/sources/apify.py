@@ -15,6 +15,7 @@ list to both UIs, so a new board is one entry here and no frontend change.
 | apify_lever      | with ats=[<that ATS>]                       | ATS; the built-in ATS handlers need a known     |
 | apify_ashby      |                                             | company                                         |
 | apify_workday    |                                             |                                                 |
+| apify_indeed_search | johnvc/indeed-jobs-api, same search URL  | optional; yearly pay and the full description   |
 
 The keys carry the `apify_` prefix so they can never collide with a JobSpy board
 ("indeed", "linkedin", "glassdoor"): a search whose `sources` still holds JobSpy
@@ -239,6 +240,61 @@ def _parse_indeed(raw: dict) -> dict:
     }
 
 
+def _indeed_search_input(search: Search, limit: int) -> dict:
+    """The same Indeed search URL as the default Indeed board, collected in URL mode.
+
+    URL mode keeps the filters already in that URL, including fromage. Company
+    details stay off. A search runs this only when its sources list names the preset.
+    """
+    url = _indeed_input(search, limit)["startUrls"][0]["url"]
+    return {
+        "mode": "url",
+        "jobUrls": [url],
+        "maxResultsPerInput": limit,
+        "uniqueJobsOnly": True,
+    }
+
+
+def _yearly_amount(value) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
+
+
+def _parse_indeed_search(raw: dict) -> dict:
+    """Flat search rows. A row whose result_type is not job is not a posting."""
+    empty = {
+        "title": "", "company": "", "url": "", "location": "", "description": "",
+        "salary_min": None, "salary_max": None, "arrangement": None, "posted": None,
+    }
+    if str(raw.get("result_type") or "job") != "job":
+        return empty
+    period = str(raw.get("salaryPeriod") or "").upper()
+    sal_min = sal_max = None
+    if period in ("YEAR", "YEARLY"):
+        sal_min = _yearly_amount(raw.get("salaryMin"))
+        sal_max = _yearly_amount(raw.get("salaryMax")) or sal_min
+    work = raw.get("workModel")
+    if isinstance(work, str) and work.strip():
+        arrangement = work.strip()
+    elif raw.get("isRemote") is True:
+        arrangement = True
+    else:
+        arrangement = None
+    location = raw.get("location")
+    return {
+        "title": raw.get("jobTitle") or "",
+        "company": raw.get("companyName") or "",
+        "url": raw.get("jobUrl") or "",
+        "location": location if isinstance(location, str) else "",
+        "description": raw.get("descriptionMarkdown") or "",
+        "salary_min": sal_min,
+        "salary_max": sal_max,
+        "arrangement": arrangement,
+        "posted": raw.get("datePosted"),
+    }
+
+
 def _parse_linkedin(raw: dict) -> dict:
     sal_min, sal_max = _annual_from_text(str(raw.get("salary") or ""))
     job_id = str(raw.get("id") or "")
@@ -351,6 +407,12 @@ PRESETS = {
     "apify_lever": _career_site("lever.co", "Lever"),
     "apify_ashby": _career_site("ashby", "Ashby"),
     "apify_workday": _career_site("workday", "Workday"),
+    # Not selected unless a search ticks it. Free-plan job fee is $0.004, so $4 per 1,000.
+    "apify_indeed_search": Preset(
+        "johnvc/indeed-jobs-api", "Indeed search",
+        "The same Indeed search URL as Indeed, including the posting-age filter. "
+        "Keeps a yearly salary and the full description. A row that is not a job is dropped.",
+        _indeed_search_input, _parse_indeed_search, 4.0),
 }
 
 

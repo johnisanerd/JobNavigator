@@ -9,6 +9,7 @@ Releases are named major.minor ("3.0"); tags before 3.0 carry a `.0` patch (`v2.
 ## [Unreleased]
 
 ### Added
+- **Optional Indeed search board:** an Apify search can tick **Indeed search** as well as Indeed. A new Apify search still starts on Indeed only. Indeed search runs the same search URL, including the posting-age filter, and stores a yearly salary, the description, and remote when the row says so. A row that is not a job is ignored. The existing Indeed board is unchanged.
 - **Rename a résumé** (by @volkotyk): in the résumé editor, click the name in the top bar (or ⋯ › Rename) to edit it. Enter or a click outside saves, Escape cancels, and a blank name keeps the old one. Before, the name came only from the create dialog or the imported PDF file name, so two imports of the same file got the same name. The API now rejects a blank or non-string name on `PATCH /api/resumes/{id}` with 400, the same as on create. Job scores already stored under the old name keep that label; a new scoring run uses the new name.
 
 ### Fixed
